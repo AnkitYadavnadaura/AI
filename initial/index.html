@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Conscious Agent Prototype</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #111; color: white; font-family: monospace; }
+    #console { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; max-width: 300px; }
+  </style>
+</head>
+<body>
+  <div id="console"><b>Agent Status:</b><br /></div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+
+  <script>
+    // THREE.js Scene
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Agent
+    const agent = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5),
+      new THREE.MeshBasicMaterial({ color: 0x00ffff })
+    );
+    scene.add(agent);
+
+    // Colored Cubes (world)
+    const cubes = [];
+    function addCube(color, x, z) {
+      const cube = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshBasicMaterial({ color })
+      );
+      cube.position.set(x, 0.5, z);
+      scene.add(cube);
+      cubes.push({ mesh: cube, color });
+    }
+
+    addCube(0xff0000, -3, 0); // Red = danger
+    addCube(0x00ff00, 3, 0);  // Green = reward
+
+    // Lighting
+    const light = new THREE.AmbientLight(0xffffff, 1);
+    scene.add(light);
+
+    camera.position.z = 8;
+    camera.position.y = 5;
+    camera.lookAt(0, 0, 0);
+
+    // Memory + Emotion
+    const memory = [];
+    let emotion = "curious";
+    const log = (msg) => document.getElementById("console").innerHTML += msg + "<br>";
+
+    // Agent Logic
+    function updateAgent() {
+      // Move randomly
+      const dx = (Math.random() - 0.5) * 0.2;
+      const dz = (Math.random() - 0.5) * 0.2;
+      agent.position.x += dx;
+      agent.position.z += dz;
+
+      // Perceive nearby objects
+      for (const { mesh, color } of cubes) {
+        const dist = agent.position.distanceTo(mesh.position);
+        if (dist < 1.5) {
+          if (color === 0xff0000) {
+            emotion = "afraid";
+          } else if (color === 0x00ff00) {
+            emotion = "happy";
+          }
+          memory.push({
+            time: Date.now(),
+            seenColor: color,
+            emotion
+          });
+        }
+      }
+
+      // Reflect occasionally
+      if (Math.random() < 0.01 && memory.length > 0) {
+        const m = memory[Math.floor(Math.random() * memory.length)];
+        log(`🧠 Recalled: Saw ${m.seenColor.toString(16)} felt ${m.emotion}`);
+      }
+    }
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      updateAgent();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
