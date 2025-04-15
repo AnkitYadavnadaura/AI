@@ -69,14 +69,30 @@
         this.emotion = "neutral";
         this.chatCooldown = 0;
         this.log(`${name} spawned at ${position}`);
+        this.cells = [this.mesh]; // Track cells in a body
+
       }
 
       moveRandomly() {
-        const dx = (Math.random() - 0.5) * 2;
-        const dz = (Math.random() - 0.5) * 2;
-        this.body.velocity.set(dx, 0, dz);
-        this.observe();
-      }
+  const speed = 10; // Increase speed
+  const dx = (Math.random() - 0.5) * speed;
+  const dz = (Math.random() - 0.5) * speed;
+  this.body.velocity.set(dx, 0, dz);
+  this.observe();
+}
+growBody() {
+  const offset = (Math.random() - 0.5) * 1.5;
+  const { mesh, body } = createCube(
+    this.body.position.x + offset,
+    this.body.position.y + 1,
+    this.body.position.z + offset,
+    this.color
+  );
+  this.cells.push(mesh);
+  this.taskHistory.push(`grew body part at (${mesh.position.x.toFixed(1)}, ${mesh.position.z.toFixed(1)})`);
+  this.log("Grew new body part.");
+}
+
 
       observe() {
         const x = this.body.position.x.toFixed(1);
@@ -93,6 +109,11 @@
         } else {
           this.setEmotion("curious");
         }
+        if (this.memory.length > 8 && new Set(this.memory).size > 6) {
+  this.growBody();
+  this.memory = []; // Reset after evolution
+}
+
       }
 
       setEmotion(emotion) {
@@ -117,16 +138,13 @@
         this.log(`${from} says: "${message}"`);
       }
 
-      shareTask(partner) {
-        if (!partner) return;
-        this.partner = partner;
-        this.log(`Sharing task with ${partner.name}`);
-        const sharedTask = () => {
-          this.createWorldObject();
-          partner.createWorldObject();
-        };
-        sharedTask();
-      }
+      const sharedTask = () => {
+  this.createWorldObject();
+  partner.createWorldObject();
+  this.growBody();
+  partner.growBody();
+};
+
 
       createWorldObject() {
         const x = this.body.position.x + (Math.random() - 0.5) * 2;
