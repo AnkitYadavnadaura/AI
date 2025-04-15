@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Multi-Agent Conscious World</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #info { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.6); padding: 10px; font-family: monospace; max-width: 300px; height: 300px; overflow-y: auto; z-index: 10; }
+  </style>
+</head>
+<body>
+<div id="info"></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const info = document.getElementById("info");
+
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+world.addBody(groundBody);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(50, 50),
+  new THREE.MeshStandardMaterial({ color: 0x222222 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(5, 10, 7.5);
+scene.add(light);
+
+const createCube = (x, y, z, color=0xffffff, dynamic=true) => {
+  const size = 0.5;
+  const geometry = new THREE.BoxGeometry(size, size, size);
+  const material = new THREE.MeshStandardMaterial({ color });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  scene.add(mesh);
+
+  const shape = new CANNON.Box(new CANNON.Vec3(size/2, size/2, size/2));
+  const body = new CANNON.Body({ mass: dynamic ? 1 : 0, shape });
+  body.position.set(x, y, z);
+  world.addBody(body);
+
+  return { mesh, body };
+};
+
+class ConsciousAgent {
+  constructor(name, color, position) {
+    this.name = name;
+    this.color = color;
+    const { mesh, body } = createCube(...position, color);
+    this.mesh = mesh;
+    this.body = body;
+    this.memory = [];
+    this.taskHistory = [];
+    this.boredomThreshold = 3;
+    this.partner = null;
+    this.emotion = "neutral";
+    this.chatCooldown = 0;
+    this.log(`${name} spawned at ${position}`);
+  }
+
+  moveRandomly() {
+    const dx = (Math.random() - 0.5) * 2;
+    const dz = (Math.random() - 0.5) * 2;
+    this.body.velocity.set(dx, 0, dz);
+    this.observe();
+  }
+
+  observe() {
+    const x = this.body.position.x.toFixed(1);
+    const z = this.body.position.z.toFixed(1);
+    const key = `${x}:${z}`;
+    this.memory.push(key);
+    if (this.memory.length > 10) this.memory.shift();
+
+    const repeatCount = this.memory.filter(k => k === key).length;
+    if (repeatCount > this.boredomThreshold) {
+      this.setEmotion("bored");
+      this.mesh.material.color.setHex(0xff5555);
+      this.log("I'm bored... I should try something new.");
+    } else {
+      this.setEmotion("curious");
+    }
+  }
+
+  setEmotion(emotion) {
+    if (this.emotion !== emotion) {
+      this.emotion = emotion;
+      this.log(`Now feeling ${emotion}`);
+    }
+  }
+
+  talk(partner) {
+    if (this.chatCooldown > 0) {
+      this.chatCooldown--;
+      return;
+    }
+    this.chatCooldown = 200;
+    const msg = `Hey ${partner.name}, I was thinking about the cube I made at ${this.taskHistory.slice(-1)[0] || "nowhere"}`;
+    this.log(`To ${partner.name}: ${msg}`);
+    partner.receiveMessage(this.name, msg);
+  }
+
+  receiveMessage(from, message) {
+    this.log(`${from} says: \"${message}\"`);
+  }
+
+  shareTask(partner) {
+    if (!partner) return;
+    this.partner = partner;
+    this.log(`Sharing task with ${partner.name}`);
+    const sharedTask = () => {
+      this.createWorldObject();
+      partner.createWorldObject();
+    };
+    sharedTask();
+  }
+
+  createWorldObject() {
+    const x = this.body.position.x + (Math.random() - 0.5) * 2;
+    const z = this.body.position.z + (Math.random() - 0.5) * 2;
+    const { mesh, body } = createCube(x, 2, z, this.color);
+    this.taskHistory.push(`(${x.toFixed(1)}, ${z.toFixed(1)})`);
+    this.log(`Created object at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+  }
+
+  log(msg) {
+    info.innerHTML += `[${this.name}] ${msg}<br>`;
+    info.scrollTop = info.scrollHeight;
+  }
+}
+
+const agentA = new ConsciousAgent("Alpha", 0x00ffff, [-2, 2, 0]);
+const agentB = new ConsciousAgent("Beta", 0xffff00, [2, 2, 0]);
+
+camera.position.set(0, 10, 10);
+camera.lookAt(0, 0, 0);
+
+agentA.shareTask(agentB);
+
+function animate() {
+  requestAnimationFrame(animate);
+  world.step(1/60);
+
+  [agentA, agentB].forEach(agent => {
+    agent.mesh.position.copy(agent.body.position);
+    agent.mesh.quaternion.copy(agent.body.quaternion);
+  });
+
+  agentA.moveRandomly();
+  agentB.moveRandomly();
+
+  if (Math.random() < 0.01) agentA.talk(agentB);
+  if (Math.random() < 0.01) agentB.talk(agentA);
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
