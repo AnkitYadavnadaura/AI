@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Multi-Agent Conscious World</title>
+  <style>
+    body { margin: 0; background: #111; color: white; font-family: monospace; }
+    #console { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; max-width: 400px; }
+  </style>
+</head>
+<body>
+  <div id="console"><b>Agents:</b><br /></div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+
+  <script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const light = new THREE.AmbientLight(0xffffff, 1);
+    scene.add(light);
+
+    camera.position.set(0, 10, 10);
+    camera.lookAt(0, 0, 0);
+
+    const cubes = [];
+    const colors = [0xff0000, 0x00ff00];
+    cubes.push(addCube(0xff0000, -4, 2)); // danger
+    cubes.push(addCube(0x00ff00, 4, -3)); // reward
+
+    function addCube(color, x, z) {
+      const cube = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshBasicMaterial({ color })
+      );
+      cube.position.set(x, 0.5, z);
+      scene.add(cube);
+      return { mesh: cube, color };
+    }
+
+    // Agents
+    class Agent {
+      constructor(name, color, x, z) {
+        this.name = name;
+        this.mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.5),
+          new THREE.MeshBasicMaterial({ color })
+        );
+        this.mesh.position.set(x, 0.5, z);
+        scene.add(this.mesh);
+        this.memory = [];
+        this.emotion = "curious";
+        this.connectedTo = [];
+      }
+
+      move() {
+        const dx = (Math.random() - 0.5) * 0.2;
+        const dz = (Math.random() - 0.5) * 0.2;
+        this.mesh.position.x += dx;
+        this.mesh.position.z += dz;
+      }
+
+      perceive() {
+        for (const { mesh, color } of cubes) {
+          const dist = this.mesh.position.distanceTo(mesh.position);
+          if (dist < 1.5) {
+            this.emotion = (color === 0xff0000) ? "afraid" : "happy";
+            this.memory.push({ seenColor: color, time: Date.now(), emotion: this.emotion });
+          }
+        }
+      }
+
+      connect(other) {
+        if (!this.connectedTo.includes(other.name)) {
+          this.connectedTo.push(other.name);
+          this.shareMemory(other);
+          log(`${this.name} connected with ${other.name}`);
+        }
+      }
+
+      shareMemory(other) {
+        const shared = [...this.memory.slice(-3)]; // Share last 3 memories
+        other.memory.push(...shared);
+        log(`${this.name} shared memory with ${other.name}`);
+      }
+
+      decideTasks(targets, other) {
+        const half = Math.ceil(targets.length / 2);
+        const myTargets = targets.slice(0, half);
+        const otherTargets = targets.slice(half);
+
+        log(`${this.name} assigned ${myTargets.length} task(s) to self`);
+        log(`${this.name} assigned ${otherTargets.length} to ${other.name}`);
+      }
+
+      interactWith(other) {
+        const d = this.mesh.position.distanceTo(other.mesh.position);
+        if (d < 2.0) {
+          this.connect(other);
+        }
+      }
+
+      think(other) {
+        if (Math.random() < 0.01 && this.memory.length > 0) {
+          const m = this.memory[Math.floor(Math.random() * this.memory.length)];
+          log(`💭 ${this.name} recalls: ${m.emotion} at ${m.time}`);
+        }
+        this.interactWith(other);
+      }
+    }
+
+    const agentA = new Agent("A", 0x00ffff, -2, 0);
+    const agentB = new Agent("B", 0xffff00, 2, 0);
+    const agents = [agentA, agentB];
+
+    function log(msg) {
+      const consoleEl = document.getElementById("console");
+      consoleEl.innerHTML += msg + "<br>";
+      if (consoleEl.innerHTML.split("<br>").length > 20) {
+        consoleEl.innerHTML = consoleEl.innerHTML.split("<br>").slice(-20).join("<br>");
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      agents.forEach(agent => {
+        agent.move();
+        agent.perceive();
+      });
+      agentA.think(agentB);
+      agentB.think(agentA);
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
