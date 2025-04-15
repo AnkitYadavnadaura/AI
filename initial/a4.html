@@ -138,13 +138,18 @@ growBody() {
         this.log(`${from} says: "${message}"`);
       }
 
-      const sharedTask = () => {
-  this.createWorldObject();
-  partner.createWorldObject();
-  this.growBody();
-  partner.growBody();
-};
-
+shareTask(partner) {
+    if (!partner) return;
+    this.partner = partner;
+    this.log(`Sharing task with ${partner.name}`);
+    
+    // Shared task function should be directly inside this method or declared separately
+    const sharedTask = () => {
+      this.createWorldObject();
+      partner.createWorldObject();
+    };
+    sharedTask();
+  }
 
       createWorldObject() {
         const x = this.body.position.x + (Math.random() - 0.5) * 2;
